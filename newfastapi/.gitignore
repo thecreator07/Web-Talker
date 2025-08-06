@@ -1,0 +1,47 @@
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Build / distribution folders
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Environment / virtualenv
+.env
+.env.*
+venv/
+.env/
+ENV/
+env/
+venv.bak/
+env.bak/
+
+# IDE config
+.vscode/
+.idea/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Test & coverage
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+.tox/
+.nox/
+
+# SQLite / db
+*.db
+*.sqlite3
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
