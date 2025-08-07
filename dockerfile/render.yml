@@ -1,13 +1,13 @@
 services:
   - type: web
-    name: qdrant-vector-db
+    name: qdrant
     env: docker
+    plan: free
     dockerfilePath: ./Dockerfile
-    plan: starter # or "free"
-    healthCheckPath: /ready
-    autoDeploy: false
-
-    disk:
-      name: qdrant-data
-      mountPath: /qdrant/storage
-      sizeGB: 5
+    autoDeploy: true
+    healthCheckPath: /dashboard
+    envVars:
+      - key: QDRANT__STORAGE__DIR
+        value: /data
+    ports:
+      - 6333

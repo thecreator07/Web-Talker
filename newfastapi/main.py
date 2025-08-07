@@ -1,9 +1,11 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
-from langchain_postgres import PGVector
+# from langchain_postgres import PGVector
 from langchain_community.document_loaders import WebBaseLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_qdrant import QdrantVectorStore
+# from qdrant_client import QdrantClient
 from openai import OpenAI
 from dotenv import load_dotenv
 import tempfile, os, json
@@ -70,15 +72,10 @@ embedder = GoogleGenerativeAIEmbeddings(
     model="models/embedding-001",
     google_api_key=os.environ.get("GEMINI_API_KEY")
 )
-print(os.environ.get("DATABASE_URL"))
+# print(os.environ.get("DATABASE_URL"))
 # Vector Store
-vector_store = PGVector(
-    embeddings=embedder,
-    collection_name="docsUV",
-    connection=os.environ.get("DATABASE_URL"),
-    use_jsonb=True,
-    create_extension=True
-)
+
+
 
 # Gemini Client
 client = OpenAI(
@@ -91,7 +88,13 @@ async def rag_injection(request: UrlRequest):
     try:
         # Step 1: Split and Embed Docs
         split_docs = docs_splitter(request.url)
-        vector_store.add_documents(split_docs)
+        print(f"[INFO] Splitting done: {len(split_docs)} chunks")
+        QdrantVectorStore.from_documents(
+                documents=split_docs,
+                url="http://web-talker-1.onrender.com",
+                collection_name="newrag",
+                embedding=embedder
+            )
 
         return "INJESTION"
 
@@ -102,7 +105,12 @@ async def rag_injection(request: UrlRequest):
 @app.post("/rag/query")
 async def rag_retrieval(request:QueryRequest):
     try:
-        relevant_chunks = vector_store.similarity_search(request.query, k=5)
+        retriver=QdrantVectorStore.from_existing_collection(
+            url='http://web-talker-1.onrender.com',
+            collection_name='newrag',
+            embedding=embedder
+        )
+        relevant_chunks = retriver.similarity_search(request.query, k=5)
         context_text = "\n".join([doc.page_content for doc in relevant_chunks])
         SYSTEM_PROMPT = f"""You are a helpful assistant that answers questions based on the available context:\n{context_text}\n\nrules:\n1. answer the question based on the context provided.\n2. don't include the 'context' word in your answer.\n3. if code then provide the code in markdown format.\n4.make the output in readable for human"""
         chat = client.chat.completions.create(
