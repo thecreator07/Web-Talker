@@ -3,8 +3,8 @@ services:
     name: qdrant-vector-db
     env: docker
     dockerfilePath: ./Dockerfile
-    healthCheckPath: /ready
     plan: starter # or "free"
+    healthCheckPath: /ready
     autoDeploy: false
 
     disk:
