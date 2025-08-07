@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: qdrant
+    env: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    autoDeploy: true
+    healthCheckPath: /dashboard
+    envVars:
+      - key: QDRANT__STORAGE__DIR
+        value: /data
+    ports:
+      - 6333
