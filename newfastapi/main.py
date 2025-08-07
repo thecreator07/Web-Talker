@@ -1,15 +1,14 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
-# from langchain_postgres import PGVector
 from langchain_community.document_loaders import WebBaseLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_qdrant import QdrantVectorStore
-# from qdrant_client import QdrantClient
 from openai import OpenAI
 from dotenv import load_dotenv
 import tempfile, os, json
 from fastapi.middleware.cors import CORSMiddleware
+import requests
 
 load_dotenv()
 
@@ -32,14 +31,12 @@ tmp_path = os.path.join(temp_dir, "sa.json")
 with open(tmp_path, "w") as f:
     json.dump(creds, f)
 
-# # Point Google SDK at this file
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = tmp_path
 
-# Init FastAPI
 app = FastAPI()
 
 origins = [
-    "http://localhost:3000",    
+    "http://localhost:3000",
     "https://your-deployed-frontend.com"
 ]
 
@@ -51,13 +48,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Models
 class UrlRequest(BaseModel):
     url: str
-    
+
 class QueryRequest(BaseModel):
     query: str
-    
 
 def docs_splitter(base_url):
     loader = WebBaseLoader(base_url)
@@ -66,18 +61,11 @@ def docs_splitter(base_url):
     split_docs = text_splitter.split_documents(docs)
     return split_docs
 
-
-# Embeddings
 embedder = GoogleGenerativeAIEmbeddings(
     model="models/embedding-001",
     google_api_key=os.environ.get("GEMINI_API_KEY")
 )
-# print(os.environ.get("DATABASE_URL"))
-# Vector Store
 
-
-
-# Gemini Client
 client = OpenAI(
     api_key=os.environ.get('GEMINI_API_KEY'),
     base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
@@ -86,31 +74,55 @@ client = OpenAI(
 @app.post("/rag/url")
 async def rag_injection(request: UrlRequest):
     try:
-        # Step 1: Split and Embed Docs
         split_docs = docs_splitter(request.url)
         print(f"[INFO] Splitting done: {len(split_docs)} chunks")
-        QdrantVectorStore.from_documents(
-                documents=split_docs,
-                url="http://web-talker-1.onrender.com",
-                collection_name="newrag",
-                embedding=embedder
-            )
 
-        return "INJESTION"
+        qdrant_url = "https://web-talker-1.onrender.com"
+        print(f"[DEBUG] Connecting to Qdrant at: {qdrant_url}")
+
+        # Check if the Qdrant service is reachable
+        try:
+            response = requests.get(f"{qdrant_url}/dashboard", timeout=10)
+            print(f"[DEBUG] Qdrant health check response: {response.status_code}")
+        except requests.exceptions.RequestException as e:
+            print(f"[DEBUG] Failed to connect to Qdrant: {e}")
+            raise HTTPException(status_code=500, detail="Failed to connect to Qdrant service")
+
+        store = QdrantVectorStore.from_documents(
+            documents=split_docs,
+            url=qdrant_url,
+            collection_name="newrag",
+            embedding=embedder,
+            timeout=30  # Increase timeout to 30 seconds
+        )
+        print(store)
+
+        return "INJECTION"
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @app.post("/rag/query")
-async def rag_retrieval(request:QueryRequest):
+async def rag_retrieval(request: QueryRequest):
     try:
-        retriver=QdrantVectorStore.from_existing_collection(
-            url='http://web-talker-1.onrender.com',
+        qdrant_url = "https://web-talker-1.onrender.com"
+        print(f"[DEBUG] Connecting to Qdrant at: {qdrant_url}")
+
+        # Check if the Qdrant service is reachable
+        try:
+            response = requests.get(f"{qdrant_url}/dashboard", timeout=10)
+            print(f"[DEBUG] Qdrant health check response: {response.status_code}")
+        except requests.exceptions.RequestException as e:
+            print(f"[DEBUG] Failed to connect to Qdrant: {e}")
+            raise HTTPException(status_code=500, detail="Failed to connect to Qdrant service")
+
+        retriever = QdrantVectorStore.from_existing_collection(
+            url=qdrant_url,
             collection_name='newrag',
-            embedding=embedder
+            embedding=embedder,
+            timeout=30  # Increase timeout to 30 seconds
         )
-        relevant_chunks = retriver.similarity_search(request.query, k=5)
+        relevant_chunks = retriever.similarity_search(request.query, k=5)
         context_text = "\n".join([doc.page_content for doc in relevant_chunks])
         SYSTEM_PROMPT = f"""You are a helpful assistant that answers questions based on the available context:\n{context_text}\n\nrules:\n1. answer the question based on the context provided.\n2. don't include the 'context' word in your answer.\n3. if code then provide the code in markdown format.\n4.make the output in readable for human"""
         chat = client.chat.completions.create(
@@ -120,10 +132,8 @@ async def rag_retrieval(request:QueryRequest):
                 {"role": "user", "content": request.query}
             ]
         )
-        
+
         return chat.choices[0].message.content
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-        
-        
