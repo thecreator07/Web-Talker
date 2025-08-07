@@ -7,6 +7,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from openai import OpenAI
 from dotenv import load_dotenv
 import tempfile, os, json
+from fastapi.middleware.cors import CORSMiddleware
 
 load_dotenv()
 
@@ -34,6 +35,19 @@ os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = tmp_path
 
 # Init FastAPI
 app = FastAPI()
+
+origins = [
+    "http://localhost:3000",    
+    "https://your-deployed-frontend.com"
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Models
 class UrlRequest(BaseModel):
