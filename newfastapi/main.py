@@ -7,13 +7,15 @@ from langchain_qdrant import QdrantVectorStore
 from qdrant_client import QdrantClient
 from openai import OpenAI
 from dotenv import load_dotenv
-import tempfile, os, json
+import tempfile, os, json, asyncio
 from fastapi.middleware.cors import CORSMiddleware
+from typing import Optional
+import hashlib
 import requests
-
 
 load_dotenv()
 
+# ✅ Google Service Account Temp Save
 creds = {
     "type": "service_account",
     "project_id": os.getenv("GOOGLE_PROJECT_ID", "text-to-speech-467917"),
@@ -28,112 +30,119 @@ creds = {
     "universe_domain": "googleapis.com"
 }
 
-temp_dir = tempfile.gettempdir()
-tmp_path = os.path.join(temp_dir, "sa.json")
+tmp_path = os.path.join(tempfile.gettempdir(), "sa.json")
 with open(tmp_path, "w") as f:
     json.dump(creds, f)
-
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = tmp_path
 
+# ✅ App Setup
 app = FastAPI()
 
-origins = [
-    "http://localhost:3000",
-    "https://your-deployed-frontend.com"
-]
-
-qdrant_client = QdrantClient(
-    url="https://7521c74d-7fa6-4f76-bf4c-658fab02244a.us-east4-0.gcp.cloud.qdrant.io:6333", 
-    api_key="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3MiOiJtIn0.-d0FDK4h-jesnenLGdOgXctvvkMFN4CznCmxfFLeGaU",
-)
-
-# print("colections: ",qdrant_client.get_collections())
-
+# Allow all origins in dev
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["*"] if os.getenv("DEV_MODE") == "true" else [
+        "http://localhost:3000",
+        "https://your-deployed-frontend.com"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-class UrlRequest(BaseModel):
-    url: str
+# ✅ Qdrant Client
+qdrant_client = QdrantClient(
+    url=os.environ.get("QDRANT_URL"),
+    api_key=os.environ.get("QDRANT_KEY")
+)
 
-class QueryRequest(BaseModel):
-    query: str
-
-def docs_splitter(base_url):
-    loader = WebBaseLoader(base_url)
-    docs = loader.load()
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=100)
-    split_docs = text_splitter.split_documents(docs)
-    return split_docs
-
+# ✅ Embeddings
 embedder = GoogleGenerativeAIEmbeddings(
     model="models/embedding-001",
     google_api_key=os.environ.get("GEMINI_API_KEY")
 )
 
+# ✅ Gemini Client
 client = OpenAI(
-    api_key=os.environ.get('GEMINI_API_KEY'),
+    api_key=os.environ.get("GEMINI_API_KEY"),
     base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
 )
 
+# ✅ Data Models
+class UrlRequest(BaseModel):
+    url: str
+    collection_name: Optional[str] = "rag"
+
+class QueryRequest(BaseModel):
+    query: str
+    collection_name: Optional[str] = "rag"
+    k: Optional[int] = 5
+
+# ✅ Helper: Document Splitter
+def docs_splitter(base_url):
+    loader = WebBaseLoader(base_url)
+    docs = loader.load()
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=100)
+    return text_splitter.split_documents(docs)
+
+# ✅ Inject Data into Qdrant
 @app.post("/rag/url")
 async def rag_injection(request: UrlRequest):
     try:
-        split_docs = docs_splitter(request.url)
-        # print(f"[INFO] Splitting done: {len(split_docs)} chunks")
+        # Create unique ID for the URL
+        url_hash = hashlib.md5(request.url.encode()).hexdigest()
 
-        # # qdrant_url = "https://web-talker-1.onrender.com/"
-        # print(f"[DEBUG] Connecting to Qdrant at: {"qdrant_url"}")
+        # Check if already processed
+        collections = qdrant_client.get_collections().collections
+        if request.collection_name not in [c.name for c in collections]:
+            qdrant_client.create_collection(
+                collection_name=request.collection_name,
+                vectors_config={"size": 768, "distance": "Cosine"}  # adjust size if needed
+            )
 
-        # # Check if the Qdrant service is reachable
-        # try:
-        #     response = requests.get(f"{"qdrant_url"}/dashboard", timeout=10)
-        #     print(f"[DEBUG] Qdrant health check response: {response.status_code}")
-        # except requests.exceptions.RequestException as e:
-        #     print(f"[DEBUG] Failed to connect to Qdrant: {e}")
-        #     raise HTTPException(status_code=500, detail="Failed to connect to Qdrant service")
-
+        # Load and embed asynchronously
+        split_docs = await asyncio.to_thread(docs_splitter, request.url)
         store = QdrantVectorStore.from_documents(
             documents=split_docs,
-            embedding=embedder,  # Google Generative AI Embeddings
-            url="https://7521c74d-7fa6-4f76-bf4c-658fab02244a.us-east4-0.gcp.cloud.qdrant.io:6333",
-            api_key="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3MiOiJtIn0.-d0FDK4h-jesnenLGdOgXctvvkMFN4CznCmxfFLeGaU",
-            collection_name="rag",
+            embedding=embedder,
+            url=os.environ.get("QDRANT_URL"),
+            api_key=os.environ.get("QDRANT_KEY"),
+            collection_name=request.collection_name,
         )
-        print(store)
 
-        return "INJECTION"
+        return {
+            "status": "success",
+            "message": "URL processed and stored in vector DB",
+            "url_hash": url_hash,
+            "chunks": len(split_docs)
+        }
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# ✅ Query Data
 @app.post("/rag/query")
 async def rag_retrieval(request: QueryRequest):
     try:
-        # qdrant_url = "https://web-talker-1.onrender.com/"
-        # print(f"[DEBUG] Connecting to Qdrant at: {qdrant_url}")
-
-        # # Check if the Qdrant service is reachable
-        # try:
-        #     response = requests.get(f"{qdrant_url}/dashboard", timeout=10)
-        #     print(f"[DEBUG] Qdrant health check response: {response.status_code}")
-        # except requests.exceptions.RequestException as e:
-        #     print(f"[DEBUG] Failed to connect to Qdrant: {e}")
-        #     raise HTTPException(status_code=500, detail="Failed to connect to Qdrant service")
-
         store = QdrantVectorStore.from_existing_collection(
-            url="https://7521c74d-7fa6-4f76-bf4c-658fab02244a.us-east4-0.gcp.cloud.qdrant.io:6333",
-            api_key="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3MiOiJtIn0.-d0FDK4h-jesnenLGdOgXctvvkMFN4CznCmxfFLeGaU",
-            collection_name="rag",
+            url=os.environ.get("QDRANT_URL"),
+            api_key=os.environ.get("QDRANT_KEY"),
+            collection_name=request.collection_name,
             embedding=embedder,
         )
-        relevant_chunks = store.similarity_search(request.query, k=5)
+
+        relevant_chunks = store.similarity_search(request.query, k=request.k)
         context_text = "\n".join([doc.page_content for doc in relevant_chunks])
-        SYSTEM_PROMPT = f"""You are a helpful assistant that answers questions based on the available context:\n{context_text}\n\nrules:\n1. answer the question based on the context provided.\n2. don't include the 'context' word in your answer.\n3. if code then provide the code in markdown format.\n4.make the output in readable for human"""
+
+        SYSTEM_PROMPT = f"""
+        You are a helpful assistant. Use ONLY this context:
+        {context_text}
+        Rules:
+        1. Answer only from context.
+        2. Provide code in markdown if applicable.
+        3. Keep it concise and clear.
+        """
+
         chat = client.chat.completions.create(
             model="gemini-2.0-flash",
             messages=[
@@ -142,7 +151,17 @@ async def rag_retrieval(request: QueryRequest):
             ]
         )
 
-        return chat.choices[0].message.content
+        return {"answer": chat.choices[0].message.content}
 
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ✅ Retrieve Collections
+@app.get("/rag/collections")
+async def list_collections():
+    try:
+        cols = qdrant_client.get_collections()
+        
+        return {"collections": [c.name for c in cols.collections]}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
