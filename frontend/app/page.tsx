@@ -83,7 +83,7 @@ export default function Home() {
   async function deleteCollection(name: string) {
     if (!confirm(`Are you sure you want to delete collection "${name}"?`)) return;
     try {
-      const res = await fetch(`${API_BASE}/rag/collections/${encodeURIComponent(name)}`, {
+      const res = await fetch(`${API_BASE}/rag/collections?collection_name=${encodeURIComponent(name)}`, {
         method: "DELETE",
       });
 console.log(res)
