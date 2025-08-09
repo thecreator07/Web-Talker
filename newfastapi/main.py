@@ -81,7 +81,7 @@ class QueryRequest(BaseModel):
 def docs_splitter(base_url):
     loader = WebBaseLoader(base_url)
     docs = loader.load()
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=100)
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
     return text_splitter.split_documents(docs)
 
 # ✅ Inject Data into Qdrant
