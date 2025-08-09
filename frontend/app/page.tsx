@@ -74,7 +74,7 @@ export default function Home() {
       if (!res.ok) throw new Error(JSON.stringify(data));
       setCollections(data.collections || []);
     } catch (err: unknown) {
-      setCollections([`Error: No Collection`]);
+      setCollections([`Error: ${err instanceof Error ?"NO collection":"error"}`]);
     } finally {
       setCollectionsLoading(false);
     }
