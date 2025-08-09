@@ -42,7 +42,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"] if os.getenv("DEV_MODE") == "true" else [
         "http://localhost:3000",
-        "https://web-talker-liart.vercel.app/"
+        "https://web-talker-liart.vercel.app"
     ],
     allow_credentials=True,
     allow_methods=["*"],
