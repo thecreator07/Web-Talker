@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException,Path
 from pydantic import BaseModel
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_community.document_loaders import WebBaseLoader
@@ -11,7 +11,6 @@ import tempfile, os, json, asyncio
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
 import hashlib
-import requests
 
 load_dotenv()
 
@@ -163,5 +162,21 @@ async def list_collections():
         cols = qdrant_client.get_collections()
         
         return {"collections": [c.name for c in cols.collections]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/rag/collections/{collection_name}")
+async def delete_collection(collection_name: str = Path(..., description="Name of the collection to delete")):
+    try:
+        # Check if collection exists
+        collections = qdrant_client.get_collections().collections
+        if collection_name not in [c.name for c in collections]:
+            raise HTTPException(status_code=404, detail=f"Collection '{collection_name}' not found")
+
+        # Delete collection
+        qdrant_client.delete_collection(collection_name=collection_name)
+        return {"status": "success", "message": f"Collection '{collection_name}' deleted successfully"}
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

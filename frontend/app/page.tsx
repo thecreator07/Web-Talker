@@ -56,7 +56,6 @@ export default function Home() {
         body: JSON.stringify({ query, collection_name: collection, k }),
       });
       const data = await res.json();
-      console.log("collections",data)
       if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
       setAnswer(data.answer ?? "(no answer)");
     } catch (err: any) {
@@ -72,7 +71,6 @@ export default function Home() {
     try {
       const res = await fetch(`${API_BASE}/rag/collections`);
       const data = await res.json();
-        console.log("collections",data)
       if (!res.ok) throw new Error(JSON.stringify(data));
       setCollections(data.collections || []);
     } catch (err: any) {
@@ -82,12 +80,30 @@ export default function Home() {
     }
   }
 
+  async function deleteCollection(name: string) {
+    if (!confirm(`Are you sure you want to delete collection "${name}"?`)) return;
+    try {
+      const res = await fetch(`${API_BASE}/rag/collections/${encodeURIComponent(name)}`, {
+        method: "DELETE",
+      });
+console.log(res)
+      const data = await res.json();
+      console.log(data)
+      if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
+      alert(data.message || `Collection "${name}" deleted`);
+      // Refresh collections list
+      loadCollections();
+    } catch (err: any) {
+      alert(`Error deleting: ${err.message || String(err)}`);
+    }
+  }
+
   return (
     <main className="min-h-screen bg-slate-50 p-6">
       <div className="max-w-4xl mx-auto">
         <header className="mb-8">
           <h1 className="text-3xl font-semibold">RAG Playground</h1>
-          <p className="text-sm text-slate-600 mt-1">Frontend for your FastAPI RAG backend — ingest URLs, run queries and browse collections.</p>
+          <p className="text-sm text-slate-600 mt-1">Frontend for your FastAPI RAG backend — ingest URLs, run queries, manage collections.</p>
         </header>
 
         <section className="grid gap-6 md:grid-cols-2">
@@ -134,14 +150,6 @@ export default function Home() {
               >
                 {collectionsLoading ? 'Loading...' : 'Refresh'}
               </button>
-
-              <button
-                onClick={() => { navigator.clipboard?.writeText(API_BASE); }}
-                className="px-3 py-2 rounded-md bg-slate-200"
-                title="Copy API base"
-              >
-                Copy API URL
-              </button>
             </div>
 
             <div className="mt-4">
@@ -150,7 +158,15 @@ export default function Home() {
               ) : (
                 <ul className="space-y-2 text-sm">
                   {collections.map((c, i) => (
-                    <li key={i} className="rounded-md p-2 border">{c}</li>
+                    <li key={i} className="rounded-md p-2 border flex justify-between items-center">
+                      <span>{c}</span>
+                      <button
+                        onClick={() => deleteCollection(c)}
+                        className="px-2 py-1 rounded bg-red-500 text-white hover:bg-red-600 text-xs"
+                      >
+                        Delete
+                      </button>
+                    </li>
                   ))}
                 </ul>
               )}
@@ -194,12 +210,11 @@ export default function Home() {
                 <pre className="whitespace-pre-wrap text-sm">{answer}</pre>
               )}
             </div>
-
-            <div className="mt-4 text-xs text-slate-500">Note: Backend uses Gemini/OpenAI client to generate the final answer from retrieved context.</div>
+            <div className="mt-4 text-xs text-slate-500">
+              Note: Backend uses Gemini/OpenAI client to generate the final answer from retrieved context.
+            </div>
           </div>
         </section>
-
-        <footer className="mt-10 text-center text-sm text-slate-500">Developed for FastAPI RAG demo — configure <code className="bg-slate-100 px-1 rounded">NEXT_PUBLIC_API_URL</code> if your backend runs elsewhere.</footer>
       </div>
     </main>
   );
