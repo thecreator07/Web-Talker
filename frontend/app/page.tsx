@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "https://web-talker-2.onrender.com";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL
 
 export default function Home() {
   const [url, setUrl] = useState("");
@@ -102,8 +102,8 @@ console.log(res)
     <main className="min-h-screen bg-slate-50 p-6">
       <div className="max-w-4xl mx-auto">
         <header className="mb-8">
-          <h1 className="text-3xl font-semibold">RAG Playground</h1>
-          <p className="text-sm text-slate-600 mt-1">Frontend for your FastAPI RAG backend — ingest URLs, run queries, manage collections.</p>
+          <h1 className="text-3xl font-semibold">Web Talker</h1>
+          <p className="text-sm text-slate-600 mt-1">Talk to Your WebURl — ingest URLs, run queries, manage collections.</p>
         </header>
 
         <section className="grid gap-6 md:grid-cols-2">
