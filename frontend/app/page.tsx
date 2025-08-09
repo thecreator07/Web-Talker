@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL
+const API_BASE = process.env.NEXT_PUBLIC_API_URL|| 'https://web-talker-2.onrender.com'
 
 export default function Home() {
   const [url, setUrl] = useState("");
