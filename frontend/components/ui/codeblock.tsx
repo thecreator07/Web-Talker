@@ -7,7 +7,7 @@ interface CodeBlockProps {
 
 export function CodeBlock({ code, language = "jsx" }: CodeBlockProps) {
   return (
-    <Highlight code={code.trim()} language={language as any} theme={themes.vsDark}>
+    <Highlight code={code.trim()} language={language as string} theme={themes.vsDark}>
       {({ className, style, tokens, getLineProps, getTokenProps }) => (
         <pre className={className} style={style}>
           {tokens.map((line, i) => (

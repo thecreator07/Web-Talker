@@ -37,8 +37,8 @@ export default function Home() {
 
       setStatusMsg("URL processed successfully");
       setChunks(data.chunks ?? null);
-    } catch (err: any) {
-      setStatusMsg(`Error: ${err.message || String(err)}`);
+    } catch (err: unknown) {
+      setStatusMsg(`Error: ${err instanceof Error ?err:"error"}`)
     } finally {
       setProcessing(false);
     }
@@ -58,8 +58,8 @@ export default function Home() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
       setAnswer(data.answer ?? "(no answer)");
-    } catch (err: any) {
-      setAnswer(`Error: ${err.message || String(err)}`);
+    } catch (err: unknown) {
+      setAnswer(`Error: ${err instanceof Error ?err:"error"}`)
     } finally {
       setQueryLoading(false);
     }
@@ -73,8 +73,8 @@ export default function Home() {
       const data = await res.json();
       if (!res.ok) throw new Error(JSON.stringify(data));
       setCollections(data.collections || []);
-    } catch (err: any) {
-      setCollections([`Error: ${err.message || String(err)}`]);
+    } catch (err: unknown) {
+      setCollections([`Error: ${err instanceof Error ?err:"error"}`]);
     } finally {
       setCollectionsLoading(false);
     }
@@ -93,8 +93,8 @@ console.log(res)
       alert(data.message || `Collection "${name}" deleted`);
       // Refresh collections list
       loadCollections();
-    } catch (err: any) {
-      alert(`Error deleting: ${err.message || String(err)}`);
+    } catch (err: unknown) {
+      alert(`Error deleting: ${err instanceof Error ?err:"error"}`);
     }
   }
 
