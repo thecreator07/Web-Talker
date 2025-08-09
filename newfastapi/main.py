@@ -88,15 +88,24 @@ def docs_splitter(base_url):
 @app.post("/rag/url")
 async def rag_injection(request: UrlRequest):
     try:
+        # Get current collections
+        collections = qdrant_client.get_collections().collections
+
+        # If collection count > 8, prevent adding a new one
+        if len(collections) > 8 and request.collection_name not in [c.name for c in collections]:
+            raise HTTPException(
+                status_code=400,
+                detail="Collection limit exceeded. Delete an existing collection before adding a new one."
+            )
+
         # Create unique ID for the URL
         url_hash = hashlib.md5(request.url.encode()).hexdigest()
 
-        # Check if already processed
-        collections = qdrant_client.get_collections().collections
+        # Create collection if it doesn't exist
         if request.collection_name not in [c.name for c in collections]:
             qdrant_client.create_collection(
                 collection_name=request.collection_name,
-                vectors_config={"size": 768, "distance": "Cosine"}  # adjust size if needed
+                vectors_config={"size": 768, "distance": "Cosine"}
             )
 
         # Load and embed asynchronously
@@ -116,6 +125,8 @@ async def rag_injection(request: UrlRequest):
             "chunks": len(split_docs)
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
