@@ -4,11 +4,13 @@ from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_community.document_loaders import WebBaseLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_qdrant import QdrantVectorStore
+from qdrant_client import QdrantClient
 from openai import OpenAI
 from dotenv import load_dotenv
 import tempfile, os, json
 from fastapi.middleware.cors import CORSMiddleware
 import requests
+
 
 load_dotenv()
 
@@ -39,6 +41,13 @@ origins = [
     "http://localhost:3000",
     "https://your-deployed-frontend.com"
 ]
+
+qdrant_client = QdrantClient(
+    url="https://7521c74d-7fa6-4f76-bf4c-658fab02244a.us-east4-0.gcp.cloud.qdrant.io:6333", 
+    api_key="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3MiOiJtIn0.-d0FDK4h-jesnenLGdOgXctvvkMFN4CznCmxfFLeGaU",
+)
+
+# print("colections: ",qdrant_client.get_collections())
 
 app.add_middleware(
     CORSMiddleware,
@@ -75,25 +84,25 @@ client = OpenAI(
 async def rag_injection(request: UrlRequest):
     try:
         split_docs = docs_splitter(request.url)
-        print(f"[INFO] Splitting done: {len(split_docs)} chunks")
+        # print(f"[INFO] Splitting done: {len(split_docs)} chunks")
 
-        qdrant_url = "https://web-talker-1.onrender.com"
-        print(f"[DEBUG] Connecting to Qdrant at: {qdrant_url}")
+        # # qdrant_url = "https://web-talker-1.onrender.com/"
+        # print(f"[DEBUG] Connecting to Qdrant at: {"qdrant_url"}")
 
-        # Check if the Qdrant service is reachable
-        try:
-            response = requests.get(f"{qdrant_url}/dashboard", timeout=10)
-            print(f"[DEBUG] Qdrant health check response: {response.status_code}")
-        except requests.exceptions.RequestException as e:
-            print(f"[DEBUG] Failed to connect to Qdrant: {e}")
-            raise HTTPException(status_code=500, detail="Failed to connect to Qdrant service")
+        # # Check if the Qdrant service is reachable
+        # try:
+        #     response = requests.get(f"{"qdrant_url"}/dashboard", timeout=10)
+        #     print(f"[DEBUG] Qdrant health check response: {response.status_code}")
+        # except requests.exceptions.RequestException as e:
+        #     print(f"[DEBUG] Failed to connect to Qdrant: {e}")
+        #     raise HTTPException(status_code=500, detail="Failed to connect to Qdrant service")
 
         store = QdrantVectorStore.from_documents(
             documents=split_docs,
-            url=qdrant_url,
-            collection_name="newrag",
-            embedding=embedder,
-            timeout=30  # Increase timeout to 30 seconds
+            embedding=embedder,  # Google Generative AI Embeddings
+            url="https://7521c74d-7fa6-4f76-bf4c-658fab02244a.us-east4-0.gcp.cloud.qdrant.io:6333",
+            api_key="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3MiOiJtIn0.-d0FDK4h-jesnenLGdOgXctvvkMFN4CznCmxfFLeGaU",
+            collection_name="rag",
         )
         print(store)
 
@@ -105,24 +114,24 @@ async def rag_injection(request: UrlRequest):
 @app.post("/rag/query")
 async def rag_retrieval(request: QueryRequest):
     try:
-        qdrant_url = "https://web-talker-1.onrender.com"
-        print(f"[DEBUG] Connecting to Qdrant at: {qdrant_url}")
+        # qdrant_url = "https://web-talker-1.onrender.com/"
+        # print(f"[DEBUG] Connecting to Qdrant at: {qdrant_url}")
 
-        # Check if the Qdrant service is reachable
-        try:
-            response = requests.get(f"{qdrant_url}/dashboard", timeout=10)
-            print(f"[DEBUG] Qdrant health check response: {response.status_code}")
-        except requests.exceptions.RequestException as e:
-            print(f"[DEBUG] Failed to connect to Qdrant: {e}")
-            raise HTTPException(status_code=500, detail="Failed to connect to Qdrant service")
+        # # Check if the Qdrant service is reachable
+        # try:
+        #     response = requests.get(f"{qdrant_url}/dashboard", timeout=10)
+        #     print(f"[DEBUG] Qdrant health check response: {response.status_code}")
+        # except requests.exceptions.RequestException as e:
+        #     print(f"[DEBUG] Failed to connect to Qdrant: {e}")
+        #     raise HTTPException(status_code=500, detail="Failed to connect to Qdrant service")
 
-        retriever = QdrantVectorStore.from_existing_collection(
-            url=qdrant_url,
-            collection_name='newrag',
+        store = QdrantVectorStore.from_existing_collection(
+            url="https://7521c74d-7fa6-4f76-bf4c-658fab02244a.us-east4-0.gcp.cloud.qdrant.io:6333",
+            api_key="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3MiOiJtIn0.-d0FDK4h-jesnenLGdOgXctvvkMFN4CznCmxfFLeGaU",
+            collection_name="rag",
             embedding=embedder,
-            timeout=30  # Increase timeout to 30 seconds
         )
-        relevant_chunks = retriever.similarity_search(request.query, k=5)
+        relevant_chunks = store.similarity_search(request.query, k=5)
         context_text = "\n".join([doc.page_content for doc in relevant_chunks])
         SYSTEM_PROMPT = f"""You are a helpful assistant that answers questions based on the available context:\n{context_text}\n\nrules:\n1. answer the question based on the context provided.\n2. don't include the 'context' word in your answer.\n3. if code then provide the code in markdown format.\n4.make the output in readable for human"""
         chat = client.chat.completions.create(
