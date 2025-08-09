@@ -6,7 +6,7 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL|| 'https://web-talker-2.onrende
 
 export default function Home() {
   const [url, setUrl] = useState("");
-  const [collection, setCollection] = useState("rag");
+  const [collection, setCollection] = useState<string>("");
   const [processing, setProcessing] = useState(false);
   const [chunks, setChunks] = useState<number | null>(null);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
