@@ -14,7 +14,7 @@ import hashlib
 
 load_dotenv()
 
-# ✅ Google Service Account Temp Save
+# Google Service Account Temp Save
 creds = {
     "type": "service_account",
     "project_id": os.getenv("GOOGLE_PROJECT_ID", "text-to-speech-467917"),
@@ -34,7 +34,7 @@ with open(tmp_path, "w") as f:
     json.dump(creds, f)
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = tmp_path
 
-# ✅ App Setup
+# App Setup
 app = FastAPI()
 
 # Allow all origins in dev
@@ -49,25 +49,25 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ✅ Qdrant Client
+# Qdrant Client
 qdrant_client = QdrantClient(
     url=os.environ.get("QDRANT_URL"),
     api_key=os.environ.get("QDRANT_KEY")
 )
 
-# ✅ Embeddings
+# Embeddings
 embedder = GoogleGenerativeAIEmbeddings(
     model="models/embedding-001",
     google_api_key=os.environ.get("GEMINI_API_KEY")
 )
 
-# ✅ Gemini Client
+# Gemini Client
 client = OpenAI(
     api_key=os.environ.get("GEMINI_API_KEY"),
     base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
 )
 
-# ✅ Data Models
+# Data Models
 class UrlRequest(BaseModel):
     url: str
     collection_name: Optional[str] = "rag"
@@ -77,14 +77,14 @@ class QueryRequest(BaseModel):
     collection_name: Optional[str] = "rag"
     k: Optional[int] = 5
 
-# ✅ Helper: Document Splitter
+# Helper: Document Splitter
 def docs_splitter(base_url):
     loader = WebBaseLoader(base_url)
     docs = loader.load()
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
     return text_splitter.split_documents(docs)
 
-# ✅ Inject Data into Qdrant
+# Inject Data into Qdrant
 @app.post("/rag/url")
 async def rag_injection(request: UrlRequest):
     try:
@@ -130,7 +130,7 @@ async def rag_injection(request: UrlRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# ✅ Query Data
+#  Query Data
 @app.post("/rag/query")
 async def rag_retrieval(request: QueryRequest):
     try:
@@ -166,7 +166,7 @@ async def rag_retrieval(request: QueryRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# ✅ Retrieve Collections
+#  Retrieve Collections
 @app.get("/rag/collections")
 async def list_collections():
     try:
