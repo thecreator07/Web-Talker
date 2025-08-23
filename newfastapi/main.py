@@ -11,7 +11,7 @@ import tempfile, os, json, asyncio
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
 import hashlib
-
+from helper import fanout
 load_dotenv()
 
 # Google Service Account Temp Save
@@ -110,7 +110,8 @@ async def rag_injection(request: UrlRequest):
 
         # Load and embed asynchronously
         split_docs = await asyncio.to_thread(docs_splitter, request.url)
-        store = QdrantVectorStore.from_documents(
+        
+        QdrantVectorStore.from_documents(
             documents=split_docs,
             embedding=embedder,
             url=os.environ.get("QDRANT_URL"),
@@ -134,26 +135,17 @@ async def rag_injection(request: UrlRequest):
 @app.post("/rag/query")
 async def rag_retrieval(request: QueryRequest):
     try:
-        store = QdrantVectorStore.from_existing_collection(
-            url=os.environ.get("QDRANT_URL"),
-            api_key=os.environ.get("QDRANT_KEY"),
-            collection_name=request.collection_name,
-            embedding=embedder,
-        )
-
-        relevant_chunks = store.similarity_search(request.query, k=request.k)
-        context_text = "\n".join([doc.page_content for doc in relevant_chunks])
-
+        context_text=fanout(request.collection_name,request.query,embedder,request.k,client)
+        
         SYSTEM_PROMPT = f"""
         You are a helpful assistant. Use ONLY this context:
         {context_text}
         Rules:
         1. Answer only from context.
-        2. Provide code in markdown if applicable.
-        3. Keep it concise and clear.
+        2. Provide code in markdown if applicable.        
         """
 
-        chat = client.chat.completions.create(
+        chat =  client.chat.completions.create(
             model="gemini-2.0-flash",
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
