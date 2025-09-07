@@ -100,7 +100,7 @@ async def rag_injection(request: UrlRequest):
 
         # Create unique ID for the URL
         url_hash = hashlib.md5(request.url.encode()).hexdigest()
-
+        print(f"Processing URL:with hash: {url_hash}")
         # Create collection if it doesn't exist
         if request.collection_name not in [c.name for c in collections]:
             qdrant_client.create_collection(
